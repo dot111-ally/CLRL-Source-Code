@@ -1,0 +1,32 @@
+﻿#pragma code_page(65001)
+IDI_ICON1 ICON DISCARDABLE "D:/Code Projects/C Stack/Calculator Language/icon.ico"
+
+#include <windows.h>
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION 1,0,0,0
+PRODUCTVERSION 1,0,0,0
+FILEFLAGSMASK 0x3fL
+FILEFLAGS 0x00L
+FILEOS VOS_NT_WINDOWS32
+FILETYPE VFT_DLL
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904E4"  // 0409 = English (US), 04E4 = Unicode
+        BEGIN
+            VALUE "CompanyName",      L"Tsukimirenitoguchi"
+            VALUE "FileDescription",  L"CLRL Runtime Library"
+            VALUE "FileVersion",      L"1.0.0.0"
+            VALUE "InternalName",     L"clrl"
+            VALUE "LegalCopyright",   L"Copyright (C) 2026 Tsukimirenitoguchi. All rights reserved."
+            VALUE "OriginalFilename", L"clrl.dll"
+            VALUE "ProductName",      L"CLRL Runtime"
+            VALUE "ProductVersion",   L"1.0.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0409, 0x04E4
+    END
+END
