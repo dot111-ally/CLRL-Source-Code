@@ -2,8 +2,8 @@
 A lightweight, high-performance calculator language interpreter with support for arbitrary-precision integer arithmetic and decimal arithmetic without floating-point errors. Built with C (MinGW) and CMake, designed for cross-platform compatibility (Windows/Linux/macOS).
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-blue)](https://github.com/your-username/clrl)
-[![Language](https://img.shields.io/badge/Language-C99-green)](https://github.com/your-username/clrl)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Linux%20%7C%20macOS-blue)](https://github.com/dot111-ally/CLRL-Source-Code)
+[![Language](https://img.shields.io/badge/Language-C99-green)](https://github.com/dot111-ally/CLRL-Source-Code)
 
 ## 📋 Table of Contents
 - [Features](#features)
@@ -41,5 +41,5 @@ A lightweight, high-performance calculator language interpreter with support for
 ### Build from Source
 #### 1. Clone the Repository
 ```bash
-git clone https://github.com/your-username/clrl.git
+git clone https://github.com/dot111-ally/CLRL-Source-Code.git
 cd clrl
