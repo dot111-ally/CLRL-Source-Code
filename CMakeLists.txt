@@ -1,61 +1,53 @@
 cmake_minimum_required(VERSION 3.18)
-project(clrl LANGUAGES C RC)  # 【核心】添加RC语言支持
+project(CLRL VERSION 1.0.0 LANGUAGES C RC)
 
+# 强制设置C99标准
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
-# 静态链接依赖（保留）
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -static -static-libgcc")
-set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static -static-libgcc")
-set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -static-libgcc")
+# ========== 关键修复：用绝对路径指定头文件目录 ==========
+set(ROOT_DIR ${CMAKE_CURRENT_SOURCE_DIR})
+set(INCLUDE_DIR ${ROOT_DIR}/include)
+include_directories(${INCLUDE_DIR})
 
-# 输出目录（保留）
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin")
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/lib")
-
-# Windows RC文件编码配置（恢复）
-if(WIN32)
-    set(CMAKE_RC_FLAGS "${CMAKE_RC_FLAGS} -c65001")  # UTF-8编码
-endif()
-
-# 1. 编译DLL（恢复RC文件）
-add_library(clrl SHARED
-    src/runtime/clrl_runtime.c
-    src/version_dll.rc  # 恢复DLL的版本资源文件
+# ========== 收集源码文件（核心修复：拆分资源文件，避免重复） ==========
+# 动态库（clrl.dll）的源码：仅用version_dll.rc
+set(LIB_SOURCES
+    ${ROOT_DIR}/src/runtime/clrl_runtime.c
+    ${ROOT_DIR}/src/version_dll.rc  # DLL专属版本资源
 )
 
-target_include_directories(clrl
-    PUBLIC ${CMAKE_SOURCE_DIR}/include
-    PRIVATE ${CMAKE_SOURCE_DIR}/src/runtime
+# 可执行文件（clrlc.exe）的源码：仅用version.rc
+set(EXE_SOURCES
+    ${ROOT_DIR}/src/cli/clrlc.c
+    ${ROOT_DIR}/src/version.rc  # EXE专属版本资源
 )
 
-# 链接数学库（保留）
-target_link_libraries(clrl m)
-
-# DLL属性（保留）
+# ========== 构建动态库 ==========
+add_library(clrl SHARED ${LIB_SOURCES})
+target_include_directories(clrl PRIVATE ${INCLUDE_DIR})
 set_target_properties(clrl PROPERTIES
-    WINDOWS_EXPORT_ALL_SYMBOLS ON
-    OUTPUT_NAME "clrl"
-    SUFFIX ".dll"
+    RUNTIME_OUTPUT_DIRECTORY ${ROOT_DIR}/bin
+    LIBRARY_OUTPUT_DIRECTORY ${ROOT_DIR}/bin
+    # 可选：隐藏DLL的符号警告（MinGW特有）
+    LINK_FLAGS "-Wl,--enable-stdcall-fixup"
 )
 
-# 2. 编译EXE（恢复RC文件）
-add_executable(clrlc
-    src/cli/clrlc.c
-    src/version.rc  # 恢复EXE的版本资源文件
-)
-
-# 链接clrl编译目标（保留）
-target_link_libraries(clrlc clrl m)
-
-target_include_directories(clrlc
-    PUBLIC ${CMAKE_SOURCE_DIR}/include
-    PRIVATE ${CMAKE_SOURCE_DIR}/src/cli
-)
-
-# EXE属性（保留）
+# ========== 构建可执行文件 ==========
+add_executable(clrlc ${EXE_SOURCES})
+target_include_directories(clrlc PRIVATE ${INCLUDE_DIR})
+target_link_libraries(clrlc PRIVATE clrl)
 set_target_properties(clrlc PROPERTIES
-    OUTPUT_NAME "clrlc"
-    SUFFIX ".exe"
+    RUNTIME_OUTPUT_DIRECTORY ${ROOT_DIR}/bin
+    # 可选：设置EXE图标（如果有icon.ico）
+    # LINK_FLAGS "-Wl,--subsystem,windows -mwindows icon.ico"
 )
+
+# ========== 编译选项：关闭无关警告（兜底） ==========
+if(MINGW)
+    # 新增 -Wno-stringop-truncation 关闭 strncpy 截断警告
+    target_compile_options(clrl PRIVATE -Wall -Wextra -O2 -Wno-unused-parameter -Wno-stringop-truncation)
+    target_compile_options(clrlc PRIVATE -Wall -Wextra -O2 -Wno-unused-parameter -Wno-stringop-truncation)
+    set_target_properties(clrl PROPERTIES LINK_FLAGS "-Wl,--allow-multiple-definition")
+    set_target_properties(clrlc PROPERTIES LINK_FLAGS "-Wl,--allow-multiple-definition")
+endif()

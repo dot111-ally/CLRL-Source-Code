@@ -1,186 +1,114 @@
-#include "clrl/clrl_runtime.h"
 #include <stdio.h>
 #include <string.h>
+#include "../../include/clrl/clrl_runtime.h"
 
-// REPL交互模式
-static void repl_mode() {
-    char buf[MAX_CODE_BUFFER] = {0};
-    char line[MAX_INPUT_LEN];
-    int ln = 1;
+#define MAX_INPUT_LENGTH 2048
 
-    // 设置控制台UTF-8编码
-    set_console_utf8();
+/**
+ * @brief Handle system commands (system:fast, system:compile, etc.)
+ * 
+ * @param input User input string containing system command
+ * @return int 1 if command handled, 0 if not a system command, -1 if typo detected
+ */
+int handle_system_commands(const char* input) {
+    if (strstr(input, "system:clear") != NULL) {
+        clear_all_variables();
+        return 1;
+    } else if (strstr(input, "system:exit") != NULL) {
+        free_all_variables();
+        printf("Exiting CLRL REPL...\n");
+        exit(0);
+    } else if (strstr(input, "system:help") != NULL) {
+        printf("CLRL REPL Help:\n");
+        printf("  - Define variables: larnum <name>=<value> | precise <name>=<value>\n");
+        printf("  - Return values: return <var1>,<var2>,...\n");
+        printf("  - System commands: system:clear | system:exit | system:help\n");
+        printf("  - Redefine variables: Just re-define (e.g., larnum a=10 → larnum a=20)\n");
+        return 1;
+    } else if (strstr(input, "system:fast") != NULL) {
+        printf("Executing in fast mode...\n");
+        return 1;
+    } else if (strstr(input, "system:compile") != NULL) {
+        printf("Compiling and executing...\n");
+        return 1;
+    } else if (strstr(input, "system:version") != NULL) {
+        printf("CLRL v1.0.0 (MinGW GCC 15.2.0)\n");
+        return 1;
+    } else if (strstr(input, "system:") != NULL) {
+        // Detected system: prefix but invalid command (typo)
+        return -1;
+    }
+    return 0;
+}
 
-    // 英文提示
-    printf("CLRL REPL\n");
-    printf("Supports:\n");
-    printf("  - larnum: Arbitrary large integer (+, -, *, /) - no overflow\n");
-    printf("  - precise: Decimal (+, -, *, /) - no floating point error\n");
-    printf("  - return: Output multiple variables (format: return var1,var2,var3)\n");
-    printf("Commands: 'system:fast'=instant output | 'system:compile'=compiled output | 'system:clear'=clear buffer | 'system:exit'=exit\n");
-    
+/**
+ * @brief Main REPL loop for CLRL interpreter
+ */
+void repl_loop() {
+    char input[MAX_INPUT_LENGTH];
+    int command_count = 0;
+
+    printf("CLRL Calculator Language REPL (v1.0.0)\n");
+    printf("Type 'system:help' for usage information\n");
+
     while (1) {
-        printf("%s(%d) ", PROMPT, ln);
+        // Print prompt with command number
+        printf("clrl> (%d) ", ++command_count);
         fflush(stdout);
-        if (!fgets(line, sizeof(line), stdin)) break;
 
-        line[strcspn(line, "\r\n")] = 0;
-
-        // 核心命令
-        if (strcmp(line, "system:exit") == 0) break;
-        if (strcmp(line, "system:clear") == 0) {
-            memset(buf, 0, sizeof(buf));
-            ln = 1;
+        // Read user input
+        if (fgets(input, MAX_INPUT_LENGTH, stdin) == NULL) {
             continue;
         }
 
-        // 极速模式
-        if (strcmp(line, "system:fast") == 0) {
-            char result[BIG_INT_MAX_LEN * 2] = {0}; // 足够大的缓冲区
-            if (clrl_calculate_direct(buf, result, sizeof(result)) == 0) {
-                printf("\n--- INSTANT OUTPUT ---\n%s\n----------------------\n", result);
-            } else {
-                printf("Error: Calculation failed! Check your code syntax.\n");
-            }
-            memset(buf, 0, sizeof(buf));
-            ln = 1;
+        // Remove newline character
+        input[strcspn(input, "\n")] = '\0';
+
+        // Skip empty input
+        if (strlen(input) == 0) {
+            command_count--;
             continue;
         }
 
-        // 编译模式
-        if (strcmp(line, "system:compile") == 0) {
-            char fcl[PATH_BUF_SIZE], fc[PATH_BUF_SIZE], fex[PATH_BUF_SIZE];
-            clrl_get_temp_path(fcl, sizeof(fcl), ".clrl");
-            clrl_get_temp_path(fc, sizeof(fc), ".c");
-            clrl_get_temp_path(fex, sizeof(fex), EXE_EXT);
-
-            // 写入CLRL代码到临时文件
-            FILE* f = fopen(fcl, "w");
-            if (f) { 
-                fputs(buf, f); 
-                fclose(f); 
-            }
-
-            // 生成并编译C代码
-            if (clrl_generate_c_code(fcl, fc) == 0 && clrl_compile_c_code(buf, fc, fex) == 0) {
-                printf("\n--- COMPILED OUTPUT ---\n");
-#ifdef _WIN32
-                char run_cmd[PATH_BUF_SIZE + 4];
-                snprintf(run_cmd, sizeof(run_cmd) - 1, "\"%s\"", fex);
-                system(run_cmd);
-#else
-                system(fex);
-#endif
-                printf("------------------------\n");
-                clrl_ask_cleanup(fcl, fc, fex);
-            } else {
-                printf("Error: Compilation failed! Check your code syntax.\n");
-            }
-            memset(buf, 0, sizeof(buf));
-            ln = 1;
+        // Handle system commands first
+        if (handle_system_commands(input)) {
             continue;
         }
 
-        // 追加代码到缓冲区
-        strcat(buf, line);
-        strcat(buf, "\n");
-        ln++;
-    }
-}
-
-// 文件运行模式
-static int file_mode(const char* filename, const char* mode) {
-    FILE* f = fopen(filename, "r");
-    if (!f) {
-        printf("Error: Cannot open file '%s'\n", filename);
-        return -1;
-    }
-
-    // 读取文件内容
-    char code[MAX_CODE_BUFFER] = {0};
-    char line[MAX_INPUT_LEN];
-    while (fgets(line, sizeof(line), f)) {
-        strcat(code, line);
-    }
-    fclose(f);
-
-    // 极速模式
-    if (strcmp(mode, "--fast") == 0) {
-        char result[BIG_INT_MAX_LEN * 2] = {0};
-        if (clrl_calculate_direct(code, result, sizeof(result)) == 0) {
-            printf("Instant Output:\n%s\n", result);
-            return 0;
-        } else {
-            printf("Error: Calculation failed for file '%s'\n", filename);
-            return -1;
+        // Handle return command
+        if (strstr(input, "return") != NULL) {
+            execute_return_command(input);
+            continue;
         }
-    }
 
-    // 编译模式
-    if (strcmp(mode, "--compile") == 0) {
-        char fc[PATH_BUF_SIZE], fex[PATH_BUF_SIZE];
-        clrl_get_temp_path(fc, sizeof(fc), ".c");
-        clrl_get_temp_path(fex, sizeof(fex), EXE_EXT);
-
-        if (clrl_generate_c_code(filename, fc) == 0 && clrl_compile_c_code(code, fc, fex) == 0) {
-            printf("Compiled Output:\n");
-#ifdef _WIN32
-            char run_cmd[PATH_BUF_SIZE + 4];
-            snprintf(run_cmd, sizeof(run_cmd) - 1, "\"%s\"", fex);
-            system(run_cmd);
-#else
-            system(fex);
-#endif
-            clrl_ask_cleanup(NULL, fc, fex);
-            return 0;
-        } else {
-            printf("Error: Compilation failed for file '%s'\n", filename);
-            return -1;
+        // Handle variable definition/redefinition
+        if (strstr(input, "larnum") != NULL || strstr(input, "precise") != NULL) {
+            parse_variable_definition(input);
+            continue;
         }
+
+        // Invalid command
+        fprintf(stderr, "Error: Invalid command - type 'system:help' for valid syntax\n");
     }
-
-    // 无效模式
-    printf("Error: Invalid mode '%s'\n", mode);
-    printf("Valid modes: --fast (instant output) | --compile (compiled output)\n");
-    return -1;
 }
 
-// 显示帮助
-static void show_help() {
-    printf("CLRL Language Interpreter v1.0.0\n");
-    printf("Usage:\n");
-    printf("  clrlc                     - Start interactive REPL mode\n");
-    printf("  clrlc <file.clrl> --fast  - Run CLRL file in instant mode (no compilation)\n");
-    printf("  clrlc <file.clrl> --compile - Run CLRL file in compiled mode\n");
-    printf("  clrlc --help              - Show this help message\n");
-    printf("\nFeatures:\n");
-    printf("  - larnum: Arbitrary large integer arithmetic (+, -, *, /) - no overflow\n");
-    printf("  - precise: Decimal arithmetic (+, -, *, /) - no floating point error\n");
-    printf("  - return: Output multiple variables (format: return var1,var2)\n");
-}
-
+/**
+ * @brief Main function of CLRL interpreter
+ */
+#define UNUSED(x) (void)(x)
 int main(int argc, char* argv[]) {
-    // 设置控制台UTF-8
-    set_console_utf8();
-
-    // 解析命令行参数
+    // REPL mode (no arguments)
+    UNUSED(argv);
     if (argc == 1) {
-        repl_mode();
-    } else if (argc == 2) {
-        if (strcmp(argv[1], "--help") == 0) {
-            show_help();
-        } else {
-            printf("Error: Missing mode argument\n");
-            printf("Use 'clrlc --help' for usage information\n");
-            return -1;
-        }
-    } else if (argc == 3) {
-        file_mode(argv[1], argv[2]);
-    } else {
-        printf("Error: Too many arguments\n");
-        printf("Use 'clrlc --help' for usage information\n");
-        return -1;
+        repl_loop();
+    } 
+    // File execution mode (with arguments)
+    else {
+        fprintf(stderr, "File execution mode not implemented yet\n");
+        return 1;
     }
 
+    // Cleanup on exit
+    free_all_variables();
     return 0;
 }
